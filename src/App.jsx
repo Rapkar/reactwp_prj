@@ -1,69 +1,113 @@
-import { useState } from 'react'
-import './App.css'
+import { useState, useEffect } from "react";
+import "./App.css";
 
 function App() {
-  const [loggedIn, setLoggedIn] = useState(false)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [title, setTitle] = useState('')
-  const [newTitle, setNewTitle] = useState('')
-  const [message, setMessage] = useState('')
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [token, setToken] = useState("");
+  const [title, setTitle] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [message, setMessage] = useState("");
 
-  const apiBase = 'http://wordpress.co/wp-json/reactwp/v1'
+  const API_BASE = "http://wordpress.co/wp-json/reactwp/v1";
 
-  // ---- Login ----
+  // ---- check if token already exists ----
+  useEffect(() => {
+    const storedToken = localStorage.getItem("reactwp_token");
+    if (storedToken) {
+      setToken(storedToken);
+      setLoggedIn(true);
+      fetchTitle(storedToken);
+    }
+  }, []);
+
+  // ---- login ----
   const handleLogin = async (e) => {
-    e.preventDefault()
-    setMessage('در حال ورود...')
+    e.preventDefault();
+    setMessage("در حال ورود...");
     try {
-      const res = await fetch(`${apiBase}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
-      })
-      const data = await res.json()
+      });
+      const data = await res.json();
       if (res.ok) {
-        setLoggedIn(true)
-        setMessage('ورود موفق ✅')
-        // گرفتن تایتل فعلی
-        const titleRes = await fetch(`${apiBase}/get-title`)
-        const titleData = await titleRes.json()
-        setTitle(titleData.title)
+        setToken(data.token);
+        localStorage.setItem("reactwp_token", data.token);
+        setLoggedIn(true);
+        setMessage("ورود موفق ✅");
+        fetchTitle(data.token);
       } else {
-        setMessage(data.message || 'ورود ناموفق ❌')
+        setMessage(data.error || "ورود ناموفق ❌");
       }
     } catch (err) {
-      setMessage('خطا در ارتباط با سرور')
+      setMessage("خطا در ارتباط با سرور");
     }
-  }
+  };
 
-  // ---- Change Title ----
-  const handleChangeTitle = async (e) => {
-    e.preventDefault()
-    setMessage('در حال بروزرسانی...')
+  // ---- fetch current title ----
+  const fetchTitle = async (token) => {
     try {
-      const res = await fetch(`${apiBase}/update-title`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_title: newTitle }),
-      })
-      const data = await res.json()
+      const res = await fetch(`${API_BASE}/get-title`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
       if (res.ok) {
-        setTitle(newTitle)
-        setMessage('عنوان با موفقیت بروزرسانی شد ✅')
+        setTitle(data.title);
       } else {
-        setMessage(data.message || 'خطا در بروزرسانی ❌')
+        setMessage(data.error || "خطا در دریافت عنوان");
       }
     } catch (err) {
-      setMessage('خطا در ارتباط با سرور')
+      setMessage("خطا در ارتباط با سرور");
     }
-  }
+  };
+
+  // ---- update title ----
+  const handleUpdateTitle = async (e) => {
+    e.preventDefault();
+    if (!newTitle) return;
+    setMessage("در حال بروزرسانی...");
+    try {
+      const res = await fetch(`${API_BASE}/update-title`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTitle(newTitle);
+        setMessage("عنوان با موفقیت بروزرسانی شد ✅");
+        setNewTitle("");
+      } else {
+        setMessage(data.error || "خطا در بروزرسانی ❌");
+      }
+    } catch (err) {
+      setMessage("خطا در ارتباط با سرور");
+    }
+  };
+
+  // ---- logout ----
+  const handleLogout = () => {
+    localStorage.removeItem("reactwp_token");
+    setLoggedIn(false);
+    setToken("");
+    setUsername("");
+    setPassword("");
+    setMessage("");
+  };
 
   // ---- UI ----
-  if (!loggedIn)
+  if (!loggedIn) {
     return (
       <div className="login-page">
-        <h2>ورود به سایت وردپرس</h2>
+        <h2>ورود به پروژه React</h2>
         <form onSubmit={handleLogin}>
           <input
             type="text"
@@ -83,14 +127,14 @@ function App() {
         </form>
         {message && <p>{message}</p>}
       </div>
-    )
+    );
+  }
 
   return (
     <div className="main-page">
       <h2>تغییر عنوان سایت وردپرس</h2>
       <p><b>عنوان فعلی:</b> {title}</p>
-
-      <form onSubmit={handleChangeTitle}>
+      <form onSubmit={handleUpdateTitle}>
         <input
           type="text"
           placeholder="عنوان جدید..."
@@ -100,9 +144,10 @@ function App() {
         />
         <button type="submit">ذخیره تغییرات</button>
       </form>
+      <button onClick={handleLogout} style={{marginTop:"10px"}}>خروج</button>
       {message && <p>{message}</p>}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
